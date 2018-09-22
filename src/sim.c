@@ -1,197 +1,248 @@
 /* VT52 simulator. */
 
-typedef enum {
-  TE,
-  TF,
-  TW,
-  TG,
-  TH,
-  TJ
-} cycle_t;
+unsigned int PC;
+unsigned char IR;
+unsigned char A;
+unsigned char B;
+unsigned char X;
+unsigned char Y;
+unsigned char R;
+unsigned char U;
+unsigned char M[256];
 
-void TE_cycle (void)
+int cursor;
+int video;
+int bell;
+
+void trace (const char *);
+static void TH_cycle_mode0 (void);
+static void TH_cycle_mode1 (void);
+static void (*TH_cycle) (void);
+
+static void TE_cycle (void)
 {
   switch (IR & 0xF8) {
   case 0x08:
-    log ("ZXZY");
+    trace ("ZXZY");
+    X = Y = 0;
     break;
   case 0x18:
-    log ("X8");
+    trace ("X8");
+    X ^= 8;
     break;
   case 0x28:
-    log ("IXDY");
+    trace ("IADY"); //Or IXDY?
+    A++;
+    Y--;
     break;
   case 0x38:
-    log ("IX");
+    trace ("IX");
+    X++;
     break;
   case 0x48:
-    log ("ZA");
+    trace ("ZA");
+    A = 0;
     break;
   case 0x58:
-    log ("M1");
+    trace ("M1");
+    TH_cycle = TH_cycle_mode1;
     break;
   case 0x68:
-    log ("ZX");
+    trace ("ZX");
+    X = 0;
     break;
   case 0x78:
-    log ("M0");
+    trace ("M0");
+    TH_cycle = TH_cycle_mode0;
     break;
   }
 }
 
-void TF_cycle (void)
+static void TF_cycle (void)
 {
   switch (IR & 0xF4) {
   case 0x04:
-    log ("DZDY");
+    trace ("DXDY");
+    X--;
+    Y--;
     break;
   case 0x14:
-    log ("IA");
+    trace ("IA");
+    A++;
     break;
   case 0x24:
-    log ("IA1");
+    trace ("IA1");
+    A++;
     break;
   case 0x34:
-    log ("IY");
+    trace ("IY");
+    Y++;
     break;
   case 0x44:
-    log ("DY");
+    trace ("DY");
+    Y--;
     break;
   case 0x54:
-    log ("IROM");
+    trace ("IROM");
+    R++;
     break;
   case 0x64:
-    log ("DX");
+    trace ("DX");
+    X--;
     break;
   case 0x74:
-    log ("DA");
+    trace ("DA");
+    A--;
     break;
   }
 }
 
-void TW_cycle (void)
+static void TW_cycle (void)
 {
   switch (IR & 0xFF) {
   case 0x00:
-    log ("SCFF");
+    trace ("SCFF");
+    cursor = 1;
     break;
   case 0x10:
-    log ("SVID");
+    trace ("SVID");
+    video = 1;
     break;
   case 0x20:
-    log ("B2Y");
+    trace ("B2Y");
+    //
     break;
   case 0x30:
-    log ("CBFF");
+    trace ("CBFF");
+    bell ^= 1;
     break;
   case 0x40:
-    log ("ZCAV");
+    trace ("ZCAV");
+    cursor = video = 0;
     break;
   case 0x50:
-    log ("LPB");
+    trace ("LPB");
     break;
   case 0x60:
-    log ("EPR");
+    trace ("EPR");
     break;
   case 0x70:
-    log ("HPRZY");
+    trace ("HPR!ZY");
+    Y = 0;
     break;
   }
 }
 
-void TG_cycle (void)
+static void TG_cycle (void)
 {
   switch (IR & 0xF2) {
   case 0x02:
-    log ("M2A");
+    trace ("M2A");
+    A = M[0];
     break;
   case 0x12:
-    log ("A2M");
+    trace ("A2M");
+    M[0] = A;
     break;
   case 0x22:
-    log ("M2U");
+    trace ("M2U");
+    U = M[0];
     break;
   case 0x32:
-    log ("B2M");
+    trace ("B2M");
+    M[0] = B;
     break;
   case 0x42:
-    log ("M2X");
+    trace ("M2X");
+    X = M[0];
     break;
   case 0x52:
-    log ("U2M");
+    trace ("U2M");
+    M[0] = U;
     break;
   case 0x62:
-    log ("M2B");
+    trace ("M2B");
+    B = M[0];
     break;
   case 0x72: 
-    log ("(spare)");
+    trace ("SPARE");
     break;
   }
 }
 
-void TH_cycle_mode0 (void)
+static void TH_cycle_mode0 (void)
 {
   PC++;
   switch (IR & 0xF1) {
   case 0x01:
-    log ("PSCJ");
+    trace ("PSCJ");
     break;
   case 0x11:
-    log ("TABJ");
+    trace ("TABJ");
     break;
   case 0x21:
-    log ("KCLJ");
+    trace ("KCLJ");
     break;
   case 0x31:
-    log ("FRQJ");
+    trace ("FRQJ");
     break;
   case 0x41:
-    log ("PRQJ");
+    trace ("PRQJ");
     break;
   case 0x51:
-    log ("COPJ");
+    trace ("TRUJ"); //Or COPJ?
     break;
   case 0x61:
-    log ("UTJ");
+    trace ("UTJ");
     break;
   case 0x71:
-    log ("TOSJ");
+    trace ("TOSJ");
     break;
   }
 }
 
-void TH_cycle_mode1 (void)
+static void TH_cycle_mode1 (void)
 {
   PC++;
   switch (IR & 0xF1) {
   case 0x01:
-    log ("URJ");
+    trace ("URJ");
     break;
   case 0x11:
-    log ("AEMJ");
+    trace ("AEMJ");
     break;
   case 0x21:
-    log ("ALMJ");
+    trace ("ALMJ");
     break;
   case 0x31:
-    log ("ADXJ");
+    trace ("ADXJ");
     break;
   case 0x41:
-    log ("AEM2J");
+    trace ("AEM2J");
     break;
   case 0x51:
-    log ("TRUJ");
+    trace ("");
     break;
   case 0x61:
-    log ("VSCJ");
+    trace ("VSCJ");
     break;
   case 0x71:
-    log ("KEYJ");
+    trace ("KEYJ");
     break;
   }
 }
 
-void TJ_cycle (void)
+static void TJ_cycle (void)
 {
   /* Jump. */
+}
+
+static void step (void)
+{
+  TE_cycle ();
+  TF_cycle ();
+  TW_cycle ();
+  TG_cycle ();
+  TH_cycle ();
+  TJ_cycle ();
 }
