@@ -8,16 +8,36 @@ unsigned char X;
 unsigned char Y;
 unsigned char R;
 unsigned char U;
-unsigned char M[256];
+unsigned char M[2048];
+unsigned char ROM[1024];
 
 int cursor;
 int video;
 int bell;
+int done;
+int write;
 
 void trace (const char *);
-static void TH_cycle_mode0 (void);
-static void TH_cycle_mode1 (void);
-static void (*TH_cycle) (void);
+static void TJ_cycle_mode0 (void);
+static void TJ_cycle_mode1 (void);
+static void (*TJ_cycle) (void);
+static void (*constant) (void);
+
+#define RAM M[(X << 8) + Y]
+
+static void constant_mode0 (void)
+{
+  A++;
+  if (A >= RAM) {
+    RAM = IR;
+    done = 1;
+  }
+}
+
+static void constant_mode1 (void)
+{
+  RAM = IR;
+}
 
 static void TE_cycle (void)
 {
@@ -31,8 +51,8 @@ static void TE_cycle (void)
     X ^= 8;
     break;
   case 0x28:
-    trace ("IADY"); //Or IXDY?
-    A++;
+    trace ("IXDY"); //Or IADY?
+    X++;
     Y--;
     break;
   case 0x38:
@@ -45,15 +65,17 @@ static void TE_cycle (void)
     break;
   case 0x58:
     trace ("M1");
-    TH_cycle = TH_cycle_mode1;
+    constant = constant_mode1;
+    TJ_cycle = TJ_cycle_mode1;
     break;
   case 0x68:
-    trace ("ZX");
+    trace ("ZX"); //Or 2Z?
     X = 0;
     break;
   case 0x78:
     trace ("M0");
-    TH_cycle = TH_cycle_mode0;
+    constant = constant_mode0;
+    TJ_cycle = TJ_cycle_mode0;
     break;
   }
 }
@@ -135,34 +157,39 @@ static void TW_cycle (void)
 
 static void TG_cycle (void)
 {
+  write = 0;
+}
+
+static void TH_cycle (void)
+{
   switch (IR & 0xF2) {
   case 0x02:
     trace ("M2A");
-    A = M[0];
+    A = RAM;
     break;
   case 0x12:
     trace ("A2M");
-    M[0] = A;
+    RAM = A;
     break;
   case 0x22:
     trace ("M2U");
-    U = M[0];
+    U = RAM;
     break;
   case 0x32:
     trace ("B2M");
-    M[0] = B;
+    RAM = B;
     break;
   case 0x42:
     trace ("M2X");
-    X = M[0];
+    X = RAM;
     break;
   case 0x52:
     trace ("U2M");
-    M[0] = U;
+    RAM = U;
     break;
   case 0x62:
     trace ("M2B");
-    B = M[0];
+    B = RAM;
     break;
   case 0x72: 
     trace ("SPARE");
@@ -170,7 +197,7 @@ static void TG_cycle (void)
   }
 }
 
-static void TH_cycle_mode0 (void)
+static void TJ_cycle_mode0 (void)
 {
   PC++;
   switch (IR & 0xF1) {
@@ -201,7 +228,7 @@ static void TH_cycle_mode0 (void)
   }
 }
 
-static void TH_cycle_mode1 (void)
+static void TJ_cycle_mode1 (void)
 {
   PC++;
   switch (IR & 0xF1) {
@@ -232,13 +259,15 @@ static void TH_cycle_mode1 (void)
   }
 }
 
-static void TJ_cycle (void)
-{
-  /* Jump. */
-}
-
 static void step (void)
 {
+  IR = ROM[PC];
+
+  if (IR & 0x80) {
+    constant();
+    return;
+  }
+
   TE_cycle ();
   TF_cycle ();
   TW_cycle ();
