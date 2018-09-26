@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include "defs.h"
+
 /* VT52 simulator. */
 
 unsigned int PC;
@@ -10,6 +13,8 @@ unsigned char R;
 unsigned char U;
 unsigned char M[2048];
 unsigned char ROM[1024];
+unsigned char MB;
+unsigned char key[100];
 
 int cursor;
 int video;
@@ -21,22 +26,26 @@ void trace (const char *);
 static void TJ_cycle_mode0 (void);
 static void TJ_cycle_mode1 (void);
 static void (*TJ_cycle) (void);
+#include "defs.h"
+
 static void (*constant) (void);
 
 #define RAM M[(X << 8) + Y]
 
 static void constant_mode0 (void)
 {
+  trace ("CONSTANT0");
   A++;
   if (A >= RAM) {
-    RAM = IR;
+    RAM = IR & 0x7F;
     done = 1;
   }
 }
 
 static void constant_mode1 (void)
 {
-  RAM = IR;
+  trace ("CONSTANT1");
+  RAM = IR & 0x7F;
 }
 
 static void TE_cycle (void)
@@ -230,6 +239,8 @@ static void TJ_cycle_mode0 (void)
 
 static void TJ_cycle_mode1 (void)
 {
+  int a;
+
   PC++;
   switch (IR & 0xF1) {
   case 0x01:
@@ -240,9 +251,15 @@ static void TJ_cycle_mode1 (void)
     break;
   case 0x21:
     trace ("ALMJ");
+    a = ROM[PC++];
+    if (A < RAM)
+      PC = a;
     break;
   case 0x31:
     trace ("ADXJ");
+    a = ROM[PC++];
+    if (A != X)
+      PC = a;
     break;
   case 0x41:
     trace ("AEM2J");
@@ -255,23 +272,49 @@ static void TJ_cycle_mode1 (void)
     break;
   case 0x71:
     trace ("KEYJ");
+    if (key[A])
+      PC = 0;
+    else
+      A--;
     break;
   }
 }
 
-static void step (void)
+static void T2_cycle (void)
 {
+  MB = RAM;
+  X++;
+}
+
+static void newline (void)
+{
+  char info[20];
+  sprintf (info, "[%02X %02X %02X %03X %02X]\n", A, X, Y, (X << 8) + Y, RAM);
+  trace (info);
+}
+
+void step (void)
+{
+  char info[20];
+
   IR = ROM[PC];
+  
+  sprintf (info, "%03X/ %02X >>", PC, IR);
+  trace (info);
 
   if (IR & 0x80) {
     constant();
-    return;
+    PC++;
+    return newline ();
   }
 
   TE_cycle ();
   TF_cycle ();
+  //T2_cycle ();
   TW_cycle ();
   TG_cycle ();
   TH_cycle ();
   TJ_cycle ();
+
+  return newline ();
 }
