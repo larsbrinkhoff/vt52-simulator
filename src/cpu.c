@@ -29,6 +29,8 @@ int bell;
 int done;
 int write;
 int fly;
+int horiz;
+int vert;
 
 void trace (const char *);
 static unsigned int address (void);
@@ -300,7 +302,7 @@ static void TJ_cycle_mode1 (void)
   switch (IR & 0xF1) {
   case 0x01:
     trace ("URJ");
-    JUMP ((rand () & 0xF) == 0); //UART received character.
+    JUMP ((rand () & 1) == 0); //UART received character.
     break;
   case 0x11:
   case 0x41:
@@ -321,7 +323,7 @@ static void TJ_cycle_mode1 (void)
     break;
   case 0x61:
     trace ("VSCJ");
-    JUMP (scan);
+    JUMP (!scan);
     break;
   case 0x71:
     trace ("KEYJ");
@@ -336,12 +338,15 @@ static void TJ_cycle_mode1 (void)
 static void T2_cycle (void)
 {
   char info[20];
-  VSR = CHAR[(MB << 3) + (A & 7)];
-  MB = RAM;
   if (!video || fly)
     return;
+  if (video)
+    VSR = CHAR[(MB << 3) + (A & 7)];
+  else if (cursor && A == X)
+    VSR = 0377;
+  MB = RAM;
   sprintf (info, "VID(%02d,%02d)", X, Y);
-  //trace (info);
+  trace (info);
   X++;
   X &= 0177;
 }
@@ -377,33 +382,29 @@ static unsigned int address (void)
   return x | (y << 6);
 }
 
-static int t = 0;
-
 void step (void)
 {
+  int t = cycles % 18;
   char info[20];
-
-  if (t == 0) {
-    IR = ROM[PC];
-    sprintf (info, "%04o/ %03o >>", PC, IR);
-    trace (info);
-  }
 
   switch (t)
     {
     case 0:
-      T2_cycle ();
+      IR = ROM[PC];
+      sprintf (info, "%04o/ %03o >>", PC, IR);
+      trace (info);
       break;
     case 1:
       TE_cycle ();
       break;
     case 2:
+      T2_cycle ();
       TF_cycle ();
       break;
     case 7:
       TW_cycle ();
       break;
-    case 9:
+    case 11:
       T2_cycle ();
       break;
     case 12:
@@ -415,10 +416,8 @@ void step (void)
     case 15:
       TJ_cycle ();
       newline ();
+      fprintf (stderr, "\tscan/%d fly/%d horiz/%d video/%d cursor/%d\n",
+	       scan, fly, horiz, video, cursor);
       break;
     }
-
-  t++;
-  if (t == 18)
-    t = 0;
 }
